@@ -1,0 +1,663 @@
+import "parameters.poosl"
+
+/*
+ * The flow of pieces over the belts is influenced by the belts, the gantry arms, the switches and the stoppers.
+ * This flow process models these interactions and provides sensor activations to the application layer.
+ */
+process class PieceFlow(p : ModelParameters)
+ports
+	trace
+	flow
+	plf
+	mv
+messages
+	// Tracing
+	trace!event(Real, String)
+	// Internal API
+	flow?start(Integer, Integer) // invoked by the Gantry process
+	flow?putPieceOnIdx(Integer, Integer) // Invoked by the Switch(2) process; pid, type
+	flow?toOutput(Integer) // Invoked by the Switch(3) process
+	// Messages to the application layer:
+	plf!await1(Integer, Integer) // piece id, type
+	plf!await2(Integer, Integer)
+	plf!await4(Integer, Integer)
+	plf!pass5(Integer, Integer)
+	plf!await8(Integer, Integer)
+	plf!pass20(Integer, Integer)
+	// Dedicated internal interface to the belts and stoppers:
+	mv!transport(Integer, Integer, Integer, Integer, String) // product id, piece type, belt id, distance in mm, tracing attributes
+	mv?transportDone(Integer, Integer, Integer) // product id, piece type, belt id
+	mv!canPass(Integer)
+variables
+
+init
+	initialize()()
+methods
+	initialize()() | |
+		receive()()
+
+	receive()() | pid : Integer, type : Integer |
+		flow?start(pid, type);
+		par
+			if type == 1 then
+				doInvertedTopFlow(pid)()
+			else if type == 2 then
+				doBottomFlow(pid)()
+			fi fi
+		and
+			receive()()
+		rap
+
+	doInvertedTopFlow(pid : Integer)() | i : Integer, type : Integer, beltId : Integer |
+		// Transport over belt 1
+		mv!transport(pid, 1, 1, p pp tr_ungrab_s5, "type=top,traj=tr_ungrab_s5");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 1));
+		// Transport over belt 2
+		mv!canPass(5);
+		mv!transport(pid, 1, 2, p pp tr_s5_w1, "type=top,traj=tr_s5_w1");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		abort
+			delay 0.00001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await1");
+				new(Observer) register halt
+			}
+		with (plf!await1(pid, 1));
+		trace!event(currentTime, "name=sensor_01,event=await,type=top");
+		mv!transport(pid, 1, 2, p pp tr_w1_s1, "type=top,traj=tr_w1_s1");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		mv!canPass(1);
+		mv!transport(pid, 1, 2, p pp tr_s1_w2, "type=top,traj=tr_s1_w2");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await2");
+				new(Observer) register halt
+			}
+		with (plf!await2(pid, 1));
+		trace!event(currentTime, "name=sensor_02,event=await,type=top");
+		mv!transport(pid, 1, 2, p pp tr_w2_s2, "type=top,traj=tr_w2_s2");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		mv!canPass(2);
+		mv!transport(pid, 1, 2, p pp tr_s2_w4, "type=top,traj=tr_s2_w4");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await4");
+				new(Observer) register halt
+			}
+		with (plf!await4(pid, 1));
+		trace!event(currentTime, "name=sensor_04,event=await,type=top");
+		mv!transport(pid, 1, 2, p pp tr_w4_s3, "type=top,traj=tr_w4_s3");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		mv!canPass(3);
+		mv!transport(pid, 1, 2, p pp tr_s3_p5, "type=top,traj=tr_s3_p5");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive pass5");
+				new(Observer) register halt
+			}
+		with (plf!pass5(pid, 1));
+		trace!event(currentTime, "name=sensor_05,event=pass,type=top");
+		// Here we model transportation past the switch 2
+		abort
+			mv!transport(pid, 1, 2, p pp tr_p5_b3, "type=top,traj=tr_p5_b3");
+			mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 2))
+		with (
+			flow?putPieceOnIdx(i, type | (i == pid) & (type == 1));
+			{
+				new(Console) writeLine("MODELING ERROR: top pushed on index table 2");
+				new(Observer) register halt
+			}
+		);
+		// Transport over belt 3
+		mv!transport(pid, 1, 3, p pp tr_b3_s4, "type=top,traj=tr_b3_s4");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 1) & (beltId == 3));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await8");
+				new(Observer) register halt
+			}
+		with (plf!await8(pid, 1));
+		trace!event(currentTime, "name=sensor_08,event=await,type=top")
+
+	doBottomFlow(pid : Integer)() | i : Integer, type : Integer, beltId : Integer |
+		// Transport over belt 1
+		mv!transport(pid, 2, 1, p pp tr_ungrab_s5, "type=bottom,traj=tr_ungrab_s5");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 1));
+		// Transport over belt 2
+		mv!canPass(5);
+		mv!transport(pid, 2, 2, p pp tr_s5_w1, "type=bottom,traj=tr_s5_w1");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await1");
+				new(Observer) register halt
+			}
+		with (plf!await1(pid, 2));
+		trace!event(currentTime, "name=sensor_01,event=await,type=bottom");
+		mv!transport(pid, 2, 2, p pp tr_w1_s1, "type=bottom,traj=tr_w1_s1");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		mv!canPass(1);
+		mv!transport(pid, 2, 2, p pp tr_s1_w2, "type=bottom,traj=tr_s1_w2");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await2");
+				new(Observer) register halt
+			}
+		with (plf!await2(pid, 2));
+		trace!event(currentTime, "name=sensor_02,event=await,type=bottom");
+		mv!transport(pid, 2, 2, p pp tr_w2_s2, "type=bottom,traj=tr_w2_s2");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		mv!canPass(2);
+		mv!transport(pid, 2, 2, p pp tr_s2_w4, "type=bottom,traj=tr_s2_w4");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive await4");
+				new(Observer) register halt
+			}
+		with (plf!await4(pid, 2));
+		trace!event(currentTime, "name=sensor_04,event=await,type=bottom");
+		mv!transport(pid, 2, 2, p pp tr_w4_s3, "type=bottom,traj=tr_w4_s3");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		mv!canPass(3);
+		mv!transport(pid, 2, 2, p pp tr_s3_p5, "type=bottom,traj=tr_s3_p5");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 2) & (beltId == 2));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive pass5");
+				new(Observer) register halt
+			}
+		with (plf!pass5(pid, 2));
+		trace!event(currentTime, "name=sensor_05,event=pass,type=bottom");
+		// Here we model a 30s time window to shove the bottom onto the index table
+		// a large window because the app mauy have to wait to claim index table 2
+		// because of earlier pieces on the table
+		abort
+			delay 30;
+			{
+				new(Console) writeLine("MODELING ERROR: bottom not pushed on index table 2");
+				
+				new(Observer) register halt
+			}
+		with (flow?putPieceOnIdx(i, type | (i == pid) & (type == 2)));
+		flow?toOutput(i | i == pid);
+		doAssembledPieceFlow(pid)()
+
+	doAssembledPieceFlow(pid : Integer)() | i : Integer, type : Integer, beltId : Integer |
+		mv!transport(pid, 3, 4, p pp tr_sw3_b5, "type=product,traj=tr_sw3_b5");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 3) & (beltId == 4));
+		mv!transport(pid, 3, 5, p pp tr_b5_p20, "type=product,traj=tr_b5_p20");
+		mv?transportDone(i, type, beltId | (i == pid) & (type == 3) & (beltId == 5));
+		abort
+			delay 0.000001;
+			{
+				new(Console) writeLine("MODELING ERROR: application cannot receive pass20");
+				new(Observer) register halt
+			}
+		with (plf!pass20(pid, 3));
+		trace!event(currentTime, "name=sensor_20,event=pass,type=product")
+
+/*
+ * Model for a physical belt.
+ */
+process class Belt(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+	movement
+messages
+	// Tracing:
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	trace!registerSignal(String, String, String)
+	trace!set(String, Real)
+	// API:
+	platform?enableBelt(Integer)
+	platform?disableBelt(Integer)
+	platform?waitUntilMoving(Integer)
+	// Internal interface from the PieceFlow process
+	movement?transport(Integer, Integer, Integer, Integer, String) // product id, piece type, belt id, distance in mm, tracing attributes
+	movement!transportDone(Integer, Integer, Integer) // product id, piece type, belt id
+variables
+	enabled : Boolean
+init
+	initialize()()
+methods
+	initialize()()
+		enabled := true;
+		trace!registerResource("Belt" + id printString, 1.0, false, "name=Belt_" + id printString);
+		trace!registerSignal("speed" + id printString, "gauge", "name=Belt_" + id printString + "_speed");
+		trace!set("speed" + id printString, p pp beltSpeed);
+		par
+			receiveOnOff()()
+		and
+			receiveTransport()()
+		and
+			receiveIsRunning()()
+		rap
+
+	receiveOnOff()() | bid : Integer |
+		sel
+			platform?enableBelt(bid | bid == id);
+			trace!set("speed" + id printString, p pp beltSpeed);
+			enabled := true
+		or
+			platform?disableBelt(bid | bid == id);
+			trace!set("speed" + id printString, 0.0);
+			enabled := false
+		les;
+		receiveOnOff()()
+
+	receiveIsRunning()() | bid : Integer |
+		platform?waitUntilMoving(bid | (bid == id) & (enabled));
+		receiveIsRunning()()
+
+	receiveTransport()() | bid : Integer, type : Integer, pid : Integer, dist : Integer, tracingInfo : String |
+		movement?transport(pid, type, bid, dist, tracingInfo | bid == id);
+		par
+			doTransport(pid, type, dist, tracingInfo)()
+		and
+			receiveTransport()()
+		rap
+
+	doTransport(pid : Integer, type : Integer, dist : Integer, tracingInfo : String)() | t0 : Real,
+			remainingTime : Real, fragCnt : Integer |
+		remainingTime := dist asReal / p pp beltSpeed;
+		fragCnt := 1;
+		while remainingTime > 0.0 do
+			[enabled] t0 := currentTime;
+			abort
+				(
+					delay remainingTime;
+					{remainingTime := 0.0}
+				)
+			with (
+				[!enabled] {remainingTime := remainingTime - (currentTime - t0)};
+				if remainingTime > 0.0 then
+					trace!claim(t0, currentTime, "Belt" + id printString, 0.25, 0.0, "name=Transport,pid=" + pid
+						printString + "," + tracingInfo + ",frag=" + fragCnt printString);
+					fragCnt := fragCnt + 1
+				fi
+			)
+		od;
+		trace!claim(t0, currentTime, "Belt" + id printString, 0.25, 0.0, "name=Transport,pid=" + pid printString + "," +
+			tracingInfo + ",frag=" + fragCnt printString);
+		movement!transportDone(pid, type, id)
+
+/*
+ * Model of the Storage area to avoid collisions between Gantry arms.
+ */
+process class StorageArea()
+ports
+	sa
+messages
+	// Internal platform interface, used by the Gantry processes
+	sa?claim()
+	sa?release()
+variables
+
+init
+	receive()()
+methods
+	receive()()
+		sa?claim();
+		sa?release();
+		receive()()
+
+/*
+ * A model of a Gantry arm.
+ */
+process class Gantry(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+	flow
+	sa
+messages
+	// Tracing:
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	// Starting a piece flow
+	flow!start(Integer, Integer)
+	// Collision avoidance on storage area (SA)
+	// SA is claimed when an arm moves towards the SA and grabs a piece.
+	// SA is released again when the arm moves away from the SA towards a belt.
+	sa!claim()
+	sa!release()
+	// API:
+	platform?loadTop(Integer, Integer)
+	platform!loadTopDone(Integer, Integer)
+	platform?loadBottom(Integer, Integer)
+	platform!loadBottomDone(Integer, Integer)
+	platform?storeProduct(Integer, Integer)
+	platform!storeProductBeltFree(Integer, Integer)
+	platform!storeProductDone(Integer, Integer)
+variables
+	pos : GantryPosition
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("Gantry" + id printString, 1.0, false, "name=Gantry_" + id printString);
+		if id == 1 then
+			pos := new(GantryPosition) home1
+		fi;
+		if id == 2 then
+			pos := new(GantryPosition) home2
+		fi;
+		doMoves()()
+
+	/*
+	 * A Gantry arm is either at home position (y==0 and z==0), or AtBelt1 (x==105 and z==180) or AtBelt5 (x==500 and z==180)
+	 */
+	doMoves()() | i : Integer, pid : Integer |
+		sel
+			platform?loadTop(i, pid | i == id);
+			if ((pos x = 105) & (pos z = 180)) then // AtBelt1
+				move(new(GantryPosition) beforeBelt1, pid, "MoveBeforeBelt1")()
+			else if ((pos x = 500) & (pos z = 180)) then // AtBelt5
+				move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")()
+			fi fi;
+			sa!claim();
+			move(p ap aboveTop(pid), pid, "MoveAboveTop")();
+			move(p ap atTop(pid), pid, "MoveAtTop")();
+			grab(pid)();
+			move(p ap aboveTop(pid), pid, "MoveAboveTop")();
+			sa!release();
+			move(new(GantryPosition) beforeBelt1, pid, "MoveBeforeBelt1")();
+			move(new(GantryPosition) atBelt1, pid, "MoveAtBelt1")();
+			ungrab(pid)();
+			flow!start(pid, 1);
+			platform!loadTopDone(id, pid);
+			doMoves()()
+		or
+			platform?loadBottom(i, pid | i == id);
+			if ((pos x = 105) & (pos z = 180)) then // AtBelt1
+				move(new(GantryPosition) beforeBelt1, pid, "MoveBeforeBelt1")()
+			else if ((pos x = 500) & (pos z = 180)) then // AtBelt5
+				move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")()
+			fi fi;
+			sa!claim();
+			move(p ap aboveBottom(pid), pid, "MoveAboveBottom")();
+			move(p ap atBottom(pid), pid, "MoveAtBottom")();
+			grab(pid)();
+			move(p ap aboveBottom(pid), pid, "MoveAboveBottom")();
+			sa!release();
+			move(new(GantryPosition) beforeBelt1, pid, "MoveBeforeBelt1")();
+			move(new(GantryPosition) atBelt1, pid, "MoveAtBelt1")();
+			ungrab(pid)();
+			flow!start(pid, 2);
+			platform!loadBottomDone(id, pid);
+			doMoves()()
+		or
+			platform?storeProduct(i, pid | i == id);
+			if ((pos x = 105) & (pos z = 180)) then // AtBelt1
+				move(new(GantryPosition) beforeBelt1, pid, "MoveBeforeBelt1")();
+				move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")();
+				move(new(GantryPosition) atBelt5, pid, "MoveAtBelt5")()
+			else if pos x = 0 then // at home position
+				move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")();
+				move(new(GantryPosition) atBelt5, pid, "MoveAtBelt5")()
+			fi fi;
+			grab(pid)();
+			move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")();
+			platform!storeProductBeltFree(id, pid);
+			sa!claim();
+			move(p ap aboveProduct(pid), pid, "MoveAboveProduct")();
+			move(p ap atProduct(pid), pid, "MoveAtProduct")();
+			ungrab(pid)();
+			move(p ap aboveProduct(pid), pid, "MoveAboveProduct")();
+			sa!release();
+			move(new(GantryPosition) beforeBelt5, pid, "MoveBeforeBelt5")();
+			move(new(GantryPosition) atBelt5, pid, "MoveAtBelt5")();
+			platform!storeProductDone(id, pid);
+			doMoves()()
+		les
+
+	move(gp : GantryPosition, pid : Integer, action : String)() | t0 : Real |
+		t0 := currentTime;
+		if id == 1 then
+			delay pos timeTo(gp, p pp arm1SpeedX, p pp arm1SpeedY, p pp arm1SpeedZ)
+		else if id == 2 then
+			delay pos timeTo(gp, p pp arm2SpeedX, p pp arm2SpeedY, p pp arm2SpeedZ)
+		fi fi;
+		pos := gp;
+		trace!claim(t0, currentTime, "Gantry" + id printString, 1.0, 0.0, "name=" + action + ",pid=" + pid printString)
+
+	grab(pid : Integer)() | t0 : Real |
+		t0 := currentTime;
+		delay 0.2;
+		trace!claim(t0, currentTime, "Gantry" + id printString, 1.0, 0.0, "name=Grab,pid=" + pid printString)
+
+	ungrab(pid : Integer)() | t0 : Real |
+		t0 := currentTime;
+		delay 0.2;
+		trace!claim(t0, currentTime, "Gantry" + id printString, 1.0, 0.0, "name=Ungrab,pid=" + pid printString)
+
+/*
+ * A model of a Stopper arm
+ */
+process class Stopper(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+	movement
+messages
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	platform?stop(Integer, Integer)
+	platform?go(Integer, Integer)
+	// Internal interface for the PieceFlow process
+	movement?canPass(Integer)
+variables
+	canPass : Boolean
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("Stopper" + id printString, 1.0, false, "name=Stopper_" + id printString);
+		canPass := true;
+		receive()()
+
+	receive()() | i : Integer, pid : Integer |
+		sel
+			movement?canPass(i | (i == id) & canPass)
+		or
+			platform?go(i, pid | i == id);
+			move(pid, "Disable", true)()
+		or
+			platform?stop(i, pid | i == id);
+			move(pid, "Enable", false)()
+		les;
+		receive()()
+
+	move(pid : Integer, action : String, canP : Boolean)() | t0 : Real |
+		t0 := currentTime;
+		delay 0.03;
+		canPass := canP;
+		trace!claim(t0, currentTime, "Stopper" + id printString, 1.0, 0.0, "name=" + action + ",pid=" + pid printString
+			+ ",resource=Stopper_" + id printString)
+
+/*
+ * A model of a Turner
+ */
+process class Turner(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+messages
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	platform?turnerFlip(Integer, Integer)
+	platform!turnerDone(Integer, Integer)
+variables
+
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("Turner" + id printString, 1.0, false, "name=Turner_" + id printString);
+		receive()()
+
+	receive()() | pid : Integer, i : Integer |
+		platform?turnerFlip(i, pid | i == id);
+		move(0.5, pid, "Down")();
+		move(0.05, pid, "Grab")();
+		move(0.5, pid, "Up")();
+		move(0.35, pid, "Flip_left")();
+		move(0.5, pid, "Down")();
+		move(0.04, pid, "Ungrab")();
+		move(0.5, pid, "Up")();
+		move(0.35, pid, "Flip_right")();
+		platform!turnerDone(id, pid);
+		receive()()
+
+	move(dt : Real, pid : Integer, action : String)() | t0 : Real |
+		t0 := currentTime;
+		delay dt;
+		trace!claim(t0, currentTime, "Turner" + id printString, 1.0, 0.0, "name=" + action + ",pid=" + pid printString)
+
+/*
+ * A model of an index table
+ */
+process class IndexTable(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+messages
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	platform?indexClaim(Integer, Integer)
+	platform?indexAlignBelt(Integer, Integer)
+	platform?indexAlignPandP(Integer, Integer)
+	platform!indexDone(Integer, Integer)
+	platform?indexRelease(Integer, Integer)
+variables
+	owner : Integer
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("IndexTable" + id printString, 1.0, false, "name=IndexTable_" + id printString);
+		owner := -1;
+		receive()()
+
+	receive()() | i : Integer |
+		platform?indexClaim(i, owner | i == id);
+		doMoves()()
+
+	doMoves()() | i : Integer, pid : Integer |
+		sel
+			platform?indexAlignBelt(i, pid | (i == id) & (pid == owner));
+			move(pid, "AlignBelt")();
+			doMoves()()
+		or
+			platform?indexAlignPandP(i, pid | (i == id) & (pid == owner));
+			move(pid, "AlignPandP")();
+			doMoves()()
+		or
+			platform?indexRelease(i, pid | (i == id) & (pid == owner));
+			receive()()
+		les
+
+	move(pid : Integer, action : String)() | t0 : Real |
+		t0 := currentTime;
+		delay p pp indexTime;
+		platform!indexDone(id, pid);
+		trace!claim(t0, currentTime, "IndexTable" + id printString, 1.0, 0.0, "name=" + action + ",pid=" + pid
+			printString)
+
+/*
+ * A model of an index table
+ */
+process class Switch(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+	flow
+messages
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	flow!putPieceOnIdx(Integer, Integer) // pid, type
+	flow!toOutput(Integer)
+	platform?enableSwitch(Integer, Integer, Integer) // switch id, pid, type
+	platform?disableSwitch(Integer, Integer, Integer)
+	platform!switchDone(Integer, Integer, Integer)
+variables
+
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("Switch" + id printString, 1.0, false, "name=Switch_" + id printString);
+		receive()()
+
+	receive()() | i, pid, type : Integer |
+		sel
+			platform?enableSwitch(i, pid, type | i == id);
+			move(pid, type, "Enable")();
+			receive()()
+		or
+			platform?disableSwitch(i, pid, type | i == id);
+			move(pid, type, "Disable")();
+			receive()()
+		les
+
+	move(pid, type : Integer, action : String)() | t0 : Real |
+		t0 := currentTime;
+		if id == 2 then
+			delay p pp sw2Time;
+			if action = "Enable" then
+				flow!putPieceOnIdx(pid, type)
+			fi
+		else if id == 3 then
+			if action = "Enable" then
+				delay p pp sw3EnableTime
+			else
+				delay p pp sw3DisableTime;
+				flow!toOutput(pid)
+			fi
+		fi fi;
+		platform!switchDone(id, pid, type);
+		trace!claim(t0, currentTime, "Switch" + id printString, 1.0, 0.0, "name=" + action + ",pid=" + pid printString)
+
+/*
+ * A model of a Pick and place unit
+ */
+process class PickAndPlace(p : ModelParameters, id : Integer)
+ports
+	trace
+	platform
+messages
+	trace!registerResource(String, Real, Boolean, String)
+	trace!claim(Real, Real, String, Real, Real, String)
+	platform?pickAndPlace(Integer, Integer)
+	platform!pickAndPlaceDone(Integer, Integer)
+variables
+
+init
+	initialize()()
+methods
+	initialize()()
+		trace!registerResource("PickPlace" + id printString, 1.0, false, "name=PickPlace_" + id printString);
+		receive()()
+
+	receive()() | pid : Integer, i : Integer, t0 : Real |
+		platform?pickAndPlace(i, pid | i == id);
+		t0 := currentTime;
+		delay p pp pickAndPlaceTime;
+		trace!claim(t0, currentTime, "PickPlace" + id printString, 1.0, 0.0, "name=Assemble,pid=" + pid printString);
+		platform!pickAndPlaceDone(id, pid);
+		receive()()

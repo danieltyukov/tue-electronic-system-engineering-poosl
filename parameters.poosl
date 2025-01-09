@@ -1,0 +1,394 @@
+/*
+ * This class models the 3D coordinates of the various symbolic gantry arm positions.
+ * It also provides a  method to compute the time to move to another position,
+ * given the speeds in the 3 directions.
+ */
+data class GantryPosition extends Object
+variables
+	x : Integer
+	y : Integer
+	z : Integer
+methods
+	@Init
+	home1() : GantryPosition
+		x := 105;
+		y := 0;
+		z := 0;
+		return self
+
+	@Init
+	home2() : GantryPosition
+		x := 500;
+		y := 0;
+		z := 0;
+		return self
+
+	x() : Integer
+		return x
+
+	y() : Integer
+		return y
+
+	z() : Integer
+		return z
+
+	@Init
+	atBelt1() : GantryPosition
+		x := 105;
+		y := 168;
+		z := 180;
+		return self
+
+	@Init
+	beforeBelt1() : GantryPosition
+		x := 105;
+		y := 280;
+		z := 180;
+		return self
+
+	@Init
+	atBelt5() : GantryPosition
+		x := 500;
+		y := 105;
+		z := 180;
+		return self
+
+	@Init
+	beforeBelt5() : GantryPosition
+		x := 500;
+		y := 280;
+		z := 180;
+		return self
+
+	@Init
+	at(xi : Integer, yi : Integer) : GantryPosition
+		x := 268 + (xi - 1) * 50;
+		y := 480 - (yi - 1) * 50;
+		z := 306;
+		return self
+
+	@Init
+	above(xi : Integer, yi : Integer) : GantryPosition
+		x := 268 + (xi - 1) * 50;
+		y := 480 - (yi - 1) * 50;
+		z := 180;
+		return self
+
+	timeTo(p : GantryPosition, vx : Real, vy : Real, vz : Real) : Real | dx : Integer, dy : Integer, dz : Integer |
+		dx := (x - p x) abs;
+		dy := (y - p y) abs;
+		dz := (z - p z) abs;
+		// Direct parallel movement assumed
+		return ((dx asReal) / vx) max((dy asReal) / vy) max((dz asReal) / vz)
+
+/*
+ * This class contains various parameters of the platform.
+ * Distances that pieces travel on belts, the speed of the belts,
+ * and the speeds of the Gantry arms.
+ */
+data class PlatformParameters extends Object
+variables
+	// On  belt 1:
+	tr_ungrab_s5 : Integer
+	// On belt 2:
+	tr_s5_w1 : Integer
+	tr_w1_s1 : Integer
+	tr_s1_w2 : Integer
+	tr_w2_s2 : Integer
+	tr_s2_w4 : Integer
+	tr_w4_s3 : Integer
+	tr_s3_p5 : Integer
+	tr_p5_b3 : Integer
+	// On belt 3:
+	tr_b3_s4 : Integer
+	// On belt 4:
+	tr_sw3_b5 : Integer
+	// On belt 5:
+	tr_b5_p20 : Integer
+	belt_speed_mm_s : Real
+	arm1_speed_x : Real
+	arm1_speed_y : Real
+	arm1_speed_z : Real
+	arm2_speed_x : Real
+	arm2_speed_y : Real
+	arm2_speed_z : Real
+	idx_time : Real
+	sw2_time : Real
+	sw3_time_dis : Real
+	sw3_time_en : Real
+	pp_time : Real
+methods
+	@Init
+	setDefaults() : PlatformParameters
+		tr_ungrab_s5 := 340;
+		// On belt 2:
+		tr_s5_w1 := 8;
+		tr_w1_s1 := 30;
+		tr_s1_w2 := 35;
+		tr_w2_s2 := 8;
+		tr_s2_w4 := 262;
+		tr_w4_s3 := 5;
+		tr_s3_p5 := 100;
+		tr_p5_b3 := 200;
+		// On belt 3:
+		tr_b3_s4 := 197;
+		// On belt 4:
+		tr_sw3_b5 := 406;
+		// On belt 5:
+		tr_b5_p20 := 306;
+		// The values for these are set via the ModelParameters:
+		belt_speed_mm_s := -1.0; // 100.0;
+		idx_time := -1.0; // 0.560;
+		arm1_speed_x := -1.0; // 250.0;
+		arm1_speed_y := -1.0; // 140.0;
+		arm1_speed_z := -1.0; // 126.0;
+		arm2_speed_x := -1.0; // 250.0;
+		arm2_speed_y := -1.0; // 140.0;
+		arm2_speed_z := -1.0; // 126.0;
+		// Further defaults:
+		sw2_time := 0.790;
+		sw3_time_en := 0.280;
+		sw3_time_dis := 0.090;
+		pp_time := 6.917;
+		return self
+
+	tr_ungrab_s5() : Integer
+		return tr_ungrab_s5
+
+	tr_s5_w1() : Integer
+		return tr_s5_w1
+
+	tr_w1_s1() : Integer
+		return tr_w1_s1
+
+	tr_s1_w2() : Integer
+		return tr_s1_w2
+
+	tr_w2_s2() : Integer
+		return tr_w2_s2
+
+	tr_s2_w4() : Integer
+		return tr_s2_w4
+
+	tr_w4_s3() : Integer
+		return tr_w4_s3
+
+	tr_s3_p5() : Integer
+		return tr_s3_p5
+
+	tr_p5_b3() : Integer
+		return tr_p5_b3
+
+	tr_b3_s4() : Integer
+		return tr_b3_s4
+
+	tr_sw3_b5() : Integer
+		return tr_sw3_b5
+
+	tr_b5_p20() : Integer
+		return tr_b5_p20
+
+	setBeltSpeed(v_mm_s : Real) : PlatformParameters
+		belt_speed_mm_s := v_mm_s;
+		return self
+
+	setArm1Speeds(vx_mm_s : Real, vy_mm_s : Real, vz_mm_s : Real) : PlatformParameters
+		arm1_speed_x := vx_mm_s;
+		arm1_speed_y := vy_mm_s;
+		arm1_speed_z := vz_mm_s;
+		return self
+
+	setArm2Speeds(vx_mm_s : Real, vy_mm_s : Real, vz_mm_s : Real) : PlatformParameters
+		arm2_speed_x := vx_mm_s;
+		arm2_speed_y := vy_mm_s;
+		arm2_speed_z := vz_mm_s;
+		return self
+
+	setIndexTime(tidx_s : Real) : PlatformParameters
+		idx_time := tidx_s;
+		return self
+
+	pickAndPlaceTime() : Real
+		return pp_time
+
+	indexTime() : Real
+		if idx_time < 0.0 then
+			new(Observer) halt
+		fi;
+		return idx_time
+
+	sw2Time() : Real
+		return sw2_time
+
+	sw3EnableTime() : Real
+		return sw3_time_en
+
+	sw3DisableTime() : Real
+		return sw3_time_dis
+
+	beltSpeed() : Real
+		if belt_speed_mm_s < 0.0 then
+			new(Observer) halt
+		fi;
+		return belt_speed_mm_s
+
+	arm1SpeedX() : Real
+		if arm1_speed_x < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm1_speed_x
+
+	arm1SpeedY() : Real
+		if arm1_speed_y < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm1_speed_y
+
+	arm1SpeedZ() : Real
+		if arm1_speed_z < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm1_speed_z
+
+	arm2SpeedX() : Real
+		if arm2_speed_x < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm2_speed_x
+
+	arm2SpeedY() : Real
+		if arm2_speed_y < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm2_speed_y
+
+	arm2SpeedZ() : Real
+		if arm2_speed_z < 0.0 then
+			new(Observer) halt
+		fi;
+		return arm2_speed_z
+
+/*
+ * This class contains all parameters of the application.
+ * Currently, it only contains methods to convert symbolic
+ * positions for pieces in the storage area to 3D coordinates
+ * for the Gantry arm movements.
+ */
+data class ApplicationParameters extends Object
+variables
+
+methods
+	@Init
+	setDefaults() : ApplicationParameters
+		return self
+
+	aboveTop(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) above(pid, 1)
+		else
+			return new(GantryPosition) above(pid - 5, 3)
+		fi
+
+	atTop(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) at(pid, 1)
+		else
+			return new(GantryPosition) at(pid - 5, 3)
+		fi
+
+	aboveBottom(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) above(pid, 2)
+		else
+			return new(GantryPosition) above(pid - 5, 4)
+		fi
+
+	atBottom(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) at(pid, 2)
+		else
+			return new(GantryPosition) at(pid - 5, 4)
+		fi
+
+	aboveProduct(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) above(pid, 5)
+		else
+			return new(GantryPosition) above(pid - 5, 4)
+		fi
+
+	atProduct(pid : Integer) : GantryPosition
+		if pid <= 5 then
+			return new(GantryPosition) at(pid, 5)
+		else
+			return new(GantryPosition) at(pid - 5, 4)
+		fi
+
+/*
+ * This class encapsulates all model parameters.
+ */
+data class ModelParameters extends Object
+variables
+	ap : ApplicationParameters
+	pp : PlatformParameters
+methods
+	@Init
+	setDefaults() : ModelParameters
+		ap := new(ApplicationParameters) setDefaults;
+		pp := new(PlatformParameters) setDefaults;
+		return self
+
+	pp() : PlatformParameters
+		return pp
+
+	ap() : ApplicationParameters
+		return ap
+
+	addSlowBelts() : ModelParameters
+		pp setBeltSpeed(50.0);
+		return self
+
+	addNormalBelts() : ModelParameters
+		pp setBeltSpeed(100.0);
+		return self
+
+	addFastBelts() : ModelParameters
+		pp setBeltSpeed(150.0);
+		return self
+
+	addSlowIndex() : ModelParameters
+		pp setIndexTime(3.0);
+		return self
+
+	addNormalIndex() : ModelParameters
+		pp setIndexTime(1.25);
+		return self
+
+	addFastIndex() : ModelParameters
+		pp setIndexTime(0.560);
+		return self
+
+	addSlowArm1() : ModelParameters
+		pp setArm1Speeds(175.0, 100.0, 90.0);
+		return self
+
+	addSlowArm2() : ModelParameters
+		pp setArm2Speeds(175.0, 100.0, 90.0);
+		return self
+
+	addNormalArm1() : ModelParameters
+		pp setArm1Speeds(250.0, 140.0, 126.0);
+		return self
+
+	addNormalArm2() : ModelParameters
+		pp setArm2Speeds(250.0, 140.0, 126.0);
+		return self
+
+	addFastArm1() : ModelParameters
+		pp setArm1Speeds(280.0, 160.0, 140.0);
+		return self
+
+	addFastArm2() : ModelParameters
+		pp setArm2Speeds(280.0, 160.0, 140.0);
+		return self
+		

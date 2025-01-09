@@ -1,0 +1,381 @@
+import "parameters.poosl"
+
+/*
+ * The Dispatcher specifies the order in which loading and unloading of pieces happens.
+ * It communicates with the Product process.
+ */
+process class Dispatcher(p : ModelParameters)
+ports
+	app
+	plf
+messages
+	// For platform initialization:
+	plf!stop(Integer, Integer)
+	plf!enableBelt(Integer)
+	plf!disableBelt(Integer)
+	plf!indexClaim(Integer, Integer)
+	plf!indexAlignBelt(Integer, Integer)
+	plf?indexDone(Integer, Integer)
+	plf!indexRelease(Integer, Integer)
+	plf?switchDone(Integer, Integer, Integer)
+	plf!enableSwitch(Integer, Integer, Integer)
+	// Produce a batch, messages to the Product process class:
+	app!load(Integer) // load inverted top and bottom
+	app?loadDone(Integer)
+	app!store(Integer) // store the assembled product
+	app?storeDone(Integer)
+	app?done()
+variables
+
+init
+	runSystem()()
+methods
+	runSystem()()
+		initPlatform()();
+		produceBatch()();
+		app?done();
+		new(Console) writeLine("Makespan : " + currentTime printString);
+		
+		// The following disable calls are a trick to work around a bug in the TRACE4CPS visualization
+		plf!disableBelt(1);
+		plf!disableBelt(2);
+		plf!disableBelt(3);
+		plf!disableBelt(4);
+		plf!disableBelt(5);
+		delay (1);
+		plf!disableBelt(1);
+		plf!disableBelt(2);
+		plf!disableBelt(3);
+		plf!disableBelt(4);
+		plf!disableBelt(5)
+
+	initPlatform()() | i, i2, i3 : Integer |
+		par
+			plf!stop(4, -1)
+		and
+			plf!enableBelt(1)
+		and
+			plf!enableBelt(2)
+		and
+			plf!enableBelt(3)
+		and
+			plf!enableBelt(4)
+		and
+			plf!enableBelt(5)
+		and
+			plf!indexClaim(2, -1);
+			plf!indexAlignBelt(2, -1);
+			plf?indexDone(i, i2 | (i == 2) & (i2 == -1));
+			plf!indexRelease(2, -1)
+		and
+			plf!enableSwitch(3, -1, 0);
+			plf?switchDone(i, i2, i3 | (i == 3) & (i2 == -1) & (i3 == 0))
+		rap
+
+	/*
+	 * This function interacts with the Product process class to produce
+	 * individual products. The sequence specified here is an example,
+	 * and not the smartest way to do it :) 
+	 */
+	produceBatch()() | i : Integer,g : Integer, k : Integer,x : Integer |
+	
+	par
+		i := 1;
+		while i<11 do
+			app?loadDone(x | x == 200+i);		//Waits for corresponding bottom to send clear message
+			app!load(100 + i);
+			i := i+1
+		od
+	and
+		g := 1;
+		while g<11 do
+			app!load(200 + g);
+			app?loadDone(x | x == 100+g);		//Waits for previous top to send clear message
+			g := g+1
+		od
+	and 
+		k := 1;
+		while k<11 do
+			//Waits for bottom and top to arrive at correct locations
+			par
+				app?loadDone(x | x == 1200+k)
+			and
+				app?loadDone(x | x == 1100+k)
+			rap;
+			
+			app!load(300 + k);
+			app?loadDone(x | x == 1300+k);
+			new(Console) writeLine(k printString);
+			k := k+1
+		od
+	rap 
+					
+/*
+ * 
+ */
+process class Product(p : ModelParameters, pid : Integer)
+ports
+	app
+	plf
+messages
+
+	// Dispatcher interface
+	app?load(Integer)		// load top and bottom (or maybe more; up to you) for product; pid
+	app!loadDone(Integer)
+	app?store(Integer)		// store the product that is at the end of belt 5; pid
+	app!storeDone(Integer)
+	app!done()				// must be called by Product process class when the batch has been finished
+	//
+	// Gantry arm interface
+	// Note that the model encodes that 10 (inverted) tops
+	// and 10 bottoms are in the storage area. The API
+	// below uses product ids (pids) and internally converts them
+	// to locations in the storage area.
+	plf!loadTop(Integer, Integer)				// Loads a top piece from the storage to belt 1; parameters gantry id, product id (pid)
+	plf?loadTopDone(Integer, Integer)			// gantry id, pid
+	plf!loadBottom(Integer, Integer)			// gantry id, pid
+	plf?loadBottomDone(Integer, Integer)		// gantry id, pid
+	plf!storeProduct(Integer, Integer)			// gantry id, pid
+	plf?storeProductBeltFree(Integer, Integer)	// called when the gantry arm is away from belt 5; gantry id, pid
+	plf?storeProductDone(Integer, Integer)		// gantry id, pid
+	//
+	// Flow interface: sensor inputs and belt control
+	// This process class must always be able to receive the await and pass messages!
+	// If that is not the case (i.e., the platform wants to send a sensor
+	// message to the application, but the application is not ready to receive
+	// it), then the simulation halts and no makespan is printed to the console.
+	// A message awaitX means that a piece arrives with its leading edge at sensor X
+	// A message passX means that a piece has completely passed sensor X
+	plf?await1(Integer, Integer)	// Happens when a piece arrives at sensor 1, parameters: pid, piece type (1=top, 2=bottom, 3=product)
+	plf?await2(Integer, Integer)	// pid, type
+	plf?await4(Integer, Integer)	// pid, type
+	plf?pass5(Integer, Integer)		// Happens when a piece has completely passed sensor 5, parameters: pid, type
+	plf?await8(Integer, Integer)	// pid, type
+	plf?pass20(Integer, Integer)	// pid, type
+	plf!enableBelt(Integer)			// Start a belt; belt id
+	plf!disableBelt(Integer)		// Stop a belt; belt id
+	plf!waitUntilMoving(Integer)	// Blocks until the belt is moving; belt id
+	//
+	// Stopper interface
+	plf!stop(Integer, Integer)		// Stopper id, pid
+	plf!go(Integer, Integer)		// Stopper id, pid
+	//
+	// Flipper interface
+	plf!turnerFlip(Integer, Integer)	// turner id, pid
+	plf?turnerDone(Integer, Integer)	// turner id, pid
+	//
+	// Index table interface
+	// Movements are only possible after claiming
+	// the index table. Initially, the index table is
+	// aligned with the belts (2 and 4). Calling then
+	// alignPandP-alignBelt-alignPandP turns the table 3*30 degrees.
+	plf!indexClaim(Integer, Integer)		// Claims the index table; index table id, pid
+	plf!indexRelease(Integer, Integer)		// Releases the index table; index table id, pid
+	plf!indexAlignBelt(Integer, Integer)	// table id, pid
+	plf!indexAlignPandP(Integer, Integer)	// table id, pid
+	plf?indexDone(Integer, Integer)			// Called after align* messages; table id, pid
+	//
+	// Switch interface
+	// Enabling switch 2 on the right moment pushes
+	// a piece on index table 2. Then disable it again
+	// before moving the index table.
+	// Disabling switch 3 on the right moment pushes
+	// a piece from the index table 2 on belt 4.
+	// Afterwards, enable it again.
+	// 
+	plf!enableSwitch(Integer, Integer, Integer)		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+	plf!disableSwitch(Integer, Integer, Integer)	// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+	plf?switchDone(Integer, Integer, Integer)		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+	//
+	// Pick-and-place interface
+	plf!pickAndPlace(Integer, Integer)		// p&p id, pid
+	plf?pickAndPlaceDone(Integer, Integer)
+	plf!waitUntilMoving()	// p&p id, pid
+variables
+
+init
+	initialize()()
+methods
+	initialize()()
+		produceProduct()()
+
+	produceProduct()() | i : Integer, g : Integer , k : Integer , l : Integer |
+		
+		/*TODO list
+			-How tf to use mutexes in poosl with the index table claims
+			- Move all the 
+		*/
+		
+		par
+			app?load(i | i == 100+pid);
+			//new(Console) writeLine("break0");
+			sendTop()();
+			new(Console) writeLine("Top sent")		
+		and
+			app?load(g | g == 200+pid);
+			sendBottom()();		
+			new(Console) writeLine("Bottom sent")			
+		and
+			//delay 10*pid;
+			//delay 20;
+			app?load(k | k == 300+pid);
+			sendProd()();	
+			
+			new(Console) writeLine("Product sent");			
+			//delay 10;
+			//app!storeDone(l);
+			if pid == 10 then
+				clearLastProd(pid+1)();
+				app!done();
+				//app!done();
+				new(Console) writeLine("App done")
+			fi
+			
+		rap
+			
+	sendTop()() |g : Integer, k : Integer,i : Integer  |
+		i := pid;
+		//new(Console) writeLine(i printString);
+		plf!loadTop(1, i);										// Loads a top piece from the storage to belt 1; parameters gantry id, product id (pid)
+		plf?loadTopDone(k, g | (k == 1) & (g == i));			// gantry id, pid
+		plf?await1(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		
+		app!loadDone(100 + i);				//Signals that the top has been cleared
+			
+		//Turner section
+		plf?await2(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		plf!stop(1, i);
+		plf!stop(2, i);
+		plf!turnerFlip(1, i);	// turner id, pid
+		plf?turnerDone(k, g | (k == 1) & (g == i));	// turner id, pid
+		plf!go(1, i);
+		plf!go(2, i);
+		
+		
+		
+		//Index table section (for tops)
+		plf?await4(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		
+		plf?pass5(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		
+		plf!stop(4, i);
+		
+		//Pick and Place section
+		plf?await8(k, g | (k == i) & (g == 1));
+		
+		app!loadDone(1100 + i)						//Top signals it has arrived at assembly point
+		
+		
+	sendBottom()() | g : Integer, k : Integer, l : Integer, i : Integer |
+		i := pid;
+		
+		plf!loadBottom(1, i);										// Loads a top piece from the storage to belt 1; parameters gantry id, product id (pid)
+		plf?loadBottomDone(k, g | (k == 1) & (g == i));			// gantry id, pid
+		//new(Console) writeLine("break");
+		
+		app!loadDone(200 + i);				//Signals that the bottom has been cleared
+		
+		plf?await1(k, g | (k == i) & (g == 2)); 				// k, g | k == pid & g == type
+		
+		plf?await2(k, g | (k == i) & (g == 2)); 				// k, g | k == pid & g == type
+
+		//Index table section (for bottoms)
+		plf?await4(k, g | (k == i) & (g == 2)); 				// k, g | k == pid & g == type
+		plf?pass5(k, g | (k == i) & (g == 2)); 				// k, g | k == pid & g == type
+		plf!stop(3, i);
+		
+		plf!indexClaim(2, i);    // Claims the index table; index table id, pid
+		//Assume that the table is aligned with belt 2/4
+		
+		plf!enableSwitch(2, i, 2);		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf?switchDone(k, g, l | (k == 2) & (g == i) & (l == 2));		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf!disableSwitch(2, i, 2);	// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf?switchDone(k, g, l | (k == 2) & (g == i) & (l == 2));		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		
+		plf!indexAlignPandP(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));
+		
+		plf!indexAlignBelt(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));		
+		
+		plf!indexAlignPandP(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));
+		
+		plf!indexRelease(2, i);		// Releases the index table; index table id, pid
+		
+		plf!go(3, i);				//When the index table is running, new bottoms aren't allowed in
+		
+		app!loadDone(1200 + i)						//Bottom signals it has arrived at assembly point
+		
+		
+	sendProd()() | g : Integer, k : Integer, l : Integer,i : Integer |
+		i := pid;
+		
+		plf!indexClaim(2, i);			//Claims the index table to prevent it from moving
+		
+		
+		plf!pickAndPlace(1, i);		// p&p id, pid
+		plf?pickAndPlaceDone(k, g | (k == 1)& (g == i));
+		
+		
+		
+		//plf!go(4, i);
+		
+		plf!indexAlignBelt(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));
+		
+		plf!indexAlignPandP(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));
+		
+		plf!indexAlignBelt(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));		
+		
+		
+		plf!enableSwitch(3, i, 3);		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf?switchDone(k, g, l | (k == 3) & (g == i) & (l == 3));		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf!disableSwitch(3, i, 3);	// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		plf?switchDone(k, g, l | (k == 3) & (g == i) & (l == 3));		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
+		
+		plf!indexRelease(2, i);			//Claims the index table to prevent it from moving
+		
+		
+		
+		app!loadDone(1300 + i);						//Product signals it has arrived at final belt
+				
+		plf?pass20(k, g | (k == i) & (g == 3));
+		
+		//The storing of products currently assumes that there are 2 gantry arms
+		plf!storeProduct(2, i);			// gantry id, pid
+		plf?storeProductBeltFree(k, g | (k == 2) & (g == i));	// called when the gantry arm is away from belt 5; gantry id, pid
+		plf?storeProductDone(k, g | (k == 2) & (g == i))		// gantry id, pid
+		
+		
+	clearLastProd(i : Integer)() | g : Integer, k : Integer, l : Integer |
+		plf!indexClaim(2, i);
+		
+		plf!indexAlignPandP(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));
+		
+		plf!indexAlignBelt(2, i);	// table id, pid
+		plf?indexDone(k, g | (k == 2) & (g == i));						
+		
+		plf!indexRelease(2, i)		// Releases the index table; index table id, pid
+		
+	//The following methods can be ignored
+		
+	
+	loadHandlerTop(i : Integer)()|g : Integer, k : Integer|
+		plf!loadTop(1, i);										// Loads a top piece from the storage to belt 1; parameters gantry id, product id (pid)
+		plf?loadTopDone(k, g | (k == 1) & (g == i));			// gantry id, pid
+		plf?await1(k, g | (k == i) & (g == 1)) 				// k, g | k == pid & g == type
+		
+	turnerHandlerTop(i : Integer)()|g : Integer, k : Integer|
+		plf?await2(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		plf!stop(1, i);
+		plf!stop(2, i);
+		plf!turnerFlip(1, i);	// turner id, pid
+		plf?turnerDone(k, g | (k == 1) & (g == i));	// turner id, pid
+		plf!go(1, i);
+		plf!go(2, i)
+
+		

@@ -1,0 +1,86 @@
+import "parameters.poosl"
+import "platform.poosl"
+import "empty-application.poosl"
+
+cluster class Platform(p : ModelParameters)
+ports
+	trace
+	platform
+instances
+	fl : PieceFlow(p := p)
+	b1 : Belt(p := p, id := 1)
+	b2 : Belt(p := p, id := 2)
+	b3 : Belt(p := p, id := 3)
+	b4 : Belt(p := p, id := 4)
+	b5 : Belt(p := p, id := 5)
+	sa : StorageArea()
+	g1 : Gantry(p := p, id := 1)
+	g2 : Gantry(p := p, id := 2)
+	s1 : Stopper(p := p, id := 1)
+	s2 : Stopper(p := p, id := 2)
+	s3 : Stopper(p := p, id := 3)
+	s4 : Stopper(p := p, id := 4)
+	s5 : Stopper(p := p, id := 5)
+	s6 : Stopper(p := p, id := 6)
+	t1 : Turner(p := p, id := 1)
+	i2 : IndexTable(p := p, id := 2)
+	sw2 : Switch(p := p, id := 2)
+	sw3 : Switch(p := p, id := 3)
+	pp : PickAndPlace(p := p, id := 1)
+channels
+	{ fl.flow, g1.flow, g2.flow, sw2.flow, sw3.flow }
+	{ fl.mv, b1.movement, b2.movement, b3.movement, b4.movement, b5.movement, s1.movement, s2.movement, s3.movement, s4.movement, s5.movement, s6.movement }
+	{ sa.sa, g1.sa, g2.sa }
+	{ trace, fl.trace, b1.trace, b2.trace, b3.trace, b4.trace, b5.trace, g1.trace, g2.trace, s1.trace, s2.trace, s3.trace,
+		s4.trace, s5.trace, s6.trace, t1.trace, i2.trace, sw2.trace, sw3.trace, pp.trace }
+	{ platform, fl.plf, b1.platform, b2.platform, b3.platform, b4.platform, b5.platform, g1.platform, g2.platform, s1.platform,
+		s2.platform, s3.platform, s4.platform, s5.platform, s6.platform, t1.platform, i2.platform, sw2.platform, sw3.platform,
+		pp.platform }
+
+cluster class Application(p : ModelParameters)
+ports
+	platform
+instances
+	disp : Dispatcher(p := p)
+	pr1 : Product(p := p, pid := 1)
+	pr2 : Product(p := p, pid := 2)
+	pr3 : Product(p := p, pid := 3)
+	pr4 : Product(p := p, pid := 4)
+	pr5 : Product(p := p, pid := 5)
+	pr6 : Product(p := p, pid := 6)
+	pr7 : Product(p := p, pid := 7)
+	pr8 : Product(p := p, pid := 8)
+	pr9 : Product(p := p, pid := 9)
+	pr10 : Product(p := p, pid := 10)
+channels
+	{ platform, disp.plf, pr1.plf, pr2.plf, pr3.plf, pr4.plf, pr5.plf, pr6.plf, pr7.plf, pr8.plf, pr9.plf, pr10.plf }
+	{ disp.app, pr1.app, pr2.app, pr3.app, pr4.app, pr5.app, pr6.app, pr7.app, pr8.app, pr9.app, pr10.app }
+
+/*
+ * Needed to have a single instantiation of ModelParameters
+ */
+cluster class Everything(p : ModelParameters)
+ports
+	trace
+instances
+	app : Application(p := p )
+	plat : Platform(p := p)
+channels
+	{ trace, plat.trace }
+	{ plat.platform, app.platform }
+
+/*
+ * Entry point of the model. Parameters are specified here.
+ */
+system
+ports
+	trace // external trace port, configured via trace.ini
+instances
+	e : Everything(p := new(ModelParameters) setDefaults
+		addSlowBelts
+		addFastIndex
+		addNormalArm1
+		addNormalArm2
+	)
+channels
+	{ trace, e.trace }
