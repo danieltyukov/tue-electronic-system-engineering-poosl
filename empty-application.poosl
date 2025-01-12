@@ -238,9 +238,12 @@ methods
 		//new(Console) writeLine(i printString);
 		plf!loadTop(1, i);										// Loads a top piece from the storage to belt 1; parameters gantry id, product id (pid)
 		plf?loadTopDone(k, g | (k == 1) & (g == i));			// gantry id, pid
-		plf?await1(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
 		
 		app!loadDone(100 + i);				//Signals that the top has been cleared
+		
+		plf?await1(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
+		
+		
 			
 		//Turner section
 		plf?await2(k, g | (k == i) & (g == 1)); 				// k, g | k == pid & g == type
@@ -317,8 +320,6 @@ methods
 		plf!pickAndPlace(1, i);		// p&p id, pid
 		plf?pickAndPlaceDone(k, g | (k == 1)& (g == i));
 		
-		
-		
 		//plf!go(4, i);
 		
 		plf!indexAlignBelt(2, i);	// table id, pid
@@ -337,8 +338,6 @@ methods
 		plf?switchDone(k, g, l | (k == 3) & (g == i) & (l == 3));		// switch id, pid, piece type (1=top, 2=bottom, 3=product)
 		
 		plf!indexRelease(2, i);			//Claims the index table to prevent it from moving
-		
-		
 		
 		app!loadDone(1300 + i);						//Product signals it has arrived at final belt
 				
