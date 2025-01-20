@@ -406,10 +406,13 @@ methods
 				
 		plf?pass20(k, g | (k == i) & (g == 3));
 		
-		//The storing of products currently assumes that there are 2 gantry arms
-		plf!storeProduct(2, i);			// gantry id, pid
-		plf?storeProductBeltFree(k, g | (k == 2) & (g == i));	// called when the gantry arm is away from belt 5; gantry id, pid
-		plf?storeProductDone(k, g | (k == 2) & (g == i))		// gantry id, pid
+		plf!disableBelt(5);		// Stop a belt; belt id
+	
+		//The storing of products assumes that there are 2 gantry arms
+		plf!storeProduct(2, i);			
+		plf?storeProductBeltFree(k, g | (k == 2) & (g == i));	
+		plf?storeProductDone(k, g | (k == 2) & (g == i));	
+		plf!enableBelt(5)			// Start a belt; belt i
 		
 	
 		
